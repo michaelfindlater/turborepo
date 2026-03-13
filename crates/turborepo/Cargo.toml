@@ -42,9 +42,5 @@ miette.workspace = true
 turborepo-lib = { workspace = true, default-features = false }
 turborepo-query = { workspace = true }
 turborepo-query-api = { workspace = true }
-turborepo-rayon-compat = { workspace = true }
 turborepo-signals = { workspace = true }
 turborepo-ui = { workspace = true }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2.140"

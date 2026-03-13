@@ -1,13 +1,23 @@
-/// Safe ceiling for rayon's global thread pool.
+/// Safe ceiling for turbo's thread pools (rayon and tokio).
 ///
-/// Rayon has a known initialization race condition that can deadlock
-/// above ~90 threads on Linux. In [testing][issue], 96 cores always
-/// deadlocked while 60 cores never did. 72 is a conservative cap — the
-/// highest multiple of 8 below the observed failure threshold — giving
-/// headroom against variance across kernel versions and schedulers.
+/// Turbo creates two thread pools: rayon (data parallelism) and tokio
+/// (async I/O), each sized to the available CPU count. On high-core
+/// machines the combined thread count triggers a futex deadlock during
+/// initialization — all threads block in `futex_wait_queue` and turbo
+/// hangs indefinitely.
+///
+/// Testing on 96-core GitHub Actions runners ([issue]) showed:
+/// - 24 total threads (12+12 via `taskset -c 0-11`): 0/120+ hangs
+/// - ~120 total threads (60 cores, no cap): 0 hangs historically
+/// - ~144 total threads (72+72 via sched_setaffinity): ~22% hang rate
+/// - ~168 total threads (72 rayon + 96 tokio, stock): ~33% hang rate
+///
+/// A per-pool cap of 32 keeps the combined count at ~64, well below the
+/// observed threshold while still providing ample parallelism. 32 worker
+/// threads already saturate most CI and build workloads.
 ///
 /// [issue]: https://github.com/vercel/turborepo/issues/12251
-pub const MAX_RAYON_THREADS: usize = 72;
+pub const MAX_RAYON_THREADS: usize = 32;
 
 /// Scale a CPU count to a safe rayon thread pool size.
 ///
@@ -53,9 +63,9 @@ mod tests {
 
     #[test]
     fn scale_thread_count_caps_at_max() {
-        assert_eq!(scale_thread_count(72), MAX_RAYON_THREADS);
+        assert_eq!(scale_thread_count(32), MAX_RAYON_THREADS);
+        assert_eq!(scale_thread_count(64), MAX_RAYON_THREADS);
         assert_eq!(scale_thread_count(96), MAX_RAYON_THREADS);
-        assert_eq!(scale_thread_count(128), MAX_RAYON_THREADS);
         assert_eq!(scale_thread_count(256), MAX_RAYON_THREADS);
     }
 
