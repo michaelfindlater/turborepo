@@ -1370,7 +1370,13 @@ pub fn run(
     // control thread count and avoid lazy initialization during a hot path.
     init_rayon_pool();
 
+    let tokio_workers = rayon_pool_size();
+    tracing::info!(
+        tokio_worker_threads = tokio_workers,
+        "initializing tokio runtime"
+    );
     let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(tokio_workers)
         .enable_all()
         .build()
         .expect("failed to build tokio runtime");
